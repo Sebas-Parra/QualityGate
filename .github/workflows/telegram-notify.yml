@@ -1,0 +1,36 @@
+name: Telegram Notify
+
+on:
+  push:
+    branches: [main, develop]
+
+jobs:
+  notify:
+    name: Send Telegram notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build message
+        id: message
+        run: |
+          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | sed 's/^/- /' | tr '\n' '\\n')
+          {
+            echo "text<<EOF"
+            echo "📦 *Nuevo commit en ReservasEC*"
+            echo "*Autor:* ${{ github.actor }}"
+            echo "*Rama:* ${{ github.ref_name }}"
+            echo "*Mensaje:* ${{ github.event.head_commit.message }}"
+            echo "*Archivos modificados:*"
+            echo "$FILES"
+            echo "*Commit:* ${{ github.event.head_commit.url }}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send to Telegram
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d parse_mode="Markdown" \
+            --data-urlencode text="${{ steps.message.outputs.text }}"
