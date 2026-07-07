@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
 
       - name: SonarQube Scan (${{ matrix.service }})
-        uses: sonarsource/sonarqube-scan-action@v4
+        uses: sonarsource/sonarqube-scan-action@v6
         with:
           projectBaseDir: ${{ matrix.service }}
           args: >
