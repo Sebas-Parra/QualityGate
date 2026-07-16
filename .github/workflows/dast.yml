@@ -46,15 +46,15 @@ jobs:
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:3000'
-          cmd_options: '-J zap-report.json -r zap-report.html'
           fail_action: false
+          allow_issue_writing: false
 
       - name: Fail pipeline on High risk findings
         run: |
-          HIGH_COUNT=$(jq '[.site[]?.alerts[]? | select(.riskcode == "3")] | length' zap-report.json)
+          HIGH_COUNT=$(jq '[.site[]?.alerts[]? | select(.riskcode == "3")] | length' report_json.json)
           echo "High risk alerts found: $HIGH_COUNT"
           if [ "$HIGH_COUNT" -gt 0 ]; then
-            jq -r '.site[]?.alerts[]? | select(.riskcode == "3") | "- \(.name): \(.desc)"' zap-report.json
+            jq -r '.site[]?.alerts[]? | select(.riskcode == "3") | "- \(.name): \(.desc)"' report_json.json
             exit 1
           fi
 
@@ -64,8 +64,9 @@ jobs:
         with:
           name: zap-report
           path: |
-            zap-report.html
-            zap-report.json
+            report_html.html
+            report_json.json
+            report_md.md
 
       - name: Stop services
         if: always()
