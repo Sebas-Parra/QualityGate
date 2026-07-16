@@ -1,0 +1,72 @@
+name: DAST Scan (OWASP ZAP)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dast:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create frontend env file
+        run: |
+          cat <<'EOF' > frontend/.env.production.local
+          NEXT_PUBLIC_API_URL=/api/auth
+          NEXT_PUBLIC_BOOKING_URL=/api/bookings
+          NEXT_PUBLIC_USER_URL=/api/users
+          EOF
+
+      - name: Build and start services
+        run: docker compose up -d --build
+
+      - name: Wait for frontend to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sSf http://localhost:3000 > /dev/null; then
+              echo "Frontend is up"
+              exit 0
+            fi
+            echo "Waiting for frontend... ($i/30)"
+            sleep 5
+          done
+          echo "Frontend did not become ready in time"
+          docker compose logs
+          exit 1
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:3000'
+          cmd_options: '-J zap-report.json -r zap-report.html'
+          fail_action: false
+
+      - name: Fail pipeline on High risk findings
+        run: |
+          HIGH_COUNT=$(jq '[.site[]?.alerts[]? | select(.riskcode == "3")] | length' zap-report.json)
+          echo "High risk alerts found: $HIGH_COUNT"
+          if [ "$HIGH_COUNT" -gt 0 ]; then
+            jq -r '.site[]?.alerts[]? | select(.riskcode == "3") | "- \(.name): \(.desc)"' zap-report.json
+            exit 1
+          fi
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            zap-report.html
+            zap-report.json
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
